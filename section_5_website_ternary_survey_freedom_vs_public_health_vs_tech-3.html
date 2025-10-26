@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Values Survey: Freedom · Public Health · Tech Intervention</title>
+  <!-- Plotly (for ternary plots) -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- Supabase client (for saving responses) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.46.1/dist/umd/supabase.js"></script>
+  <style>
+    :root{--bg:#0b0c10;--card:#111318;--text:#f0f3f7;--muted:#a8b3c7;--accent:#60a5fa;--ok:#34d399;--warn:#f59e0b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:24px 16px;max-width:980px;margin:0 auto}
+    h1{margin:0 0 6px 0;font-size:28px}
+    p.lede{margin:0;color:var(--muted)}
+    main{max-width:980px;margin:16px auto;padding:0 16px;display:grid;gap:16px}
+    .card{background:var(--card);border:1px solid #1e2230;border-radius:16px;padding:16px;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+    .grid{display:grid;gap:16px}
+    .grid.cols-2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .controls{display:grid;gap:8px}
+    .row{display:grid;grid-template-columns:140px 1fr 80px;gap:8px;align-items:center}
+    input[type="range"]{width:100%}
+    .sum{font-weight:600}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#1e2230;color:var(--muted);font-size:12px}
+    button{background:var(--accent);color:#06121f;border:none;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .notice{font-size:14px;color:var(--muted)}
+    footer{max-width:980px;margin:8px auto 24px;padding:0 16px;color:var(--muted)}
+    .ok{color:var(--ok)} .warn{color:var(--warn)}
+    .hr{height:1px;background:#1e2230;margin:12px 0}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Values Survey</h1>
+    <p class="lede">Set how society prioritises these values today and in 2075: <strong>Individual Freedom</strong>, <strong>Public Health Responsibility</strong>, <strong>Technological Intervention</strong>.</p>
+    <p class="notice">Move the sliders so they add to <strong>100</strong> for each year. Your dot updates on the triangle. One submission per browser.</p>
+  </header>
+
+  <main>
+    <section class="grid cols-2">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Present day</h2>
+          <span class="badge" id="sumNowBadge">Sum: <span id="sumNow">0</span></span>
+        </div>
+        <div id="plotNow" style="height:360px"></div>
+        <div class="controls">
+          <div class="row"><label>Individual Freedom</label><input id="nowA" type="range" min="0" max="100" step="1" value="33"><span id="nowATxt">33</span></div>
+          <div class="row"><label>Public Health Responsibility</label><input id="nowB" type="range" min="0" max="100" step="1" value="33"><span id="nowBTxt">33</span></div>
+          <div class="row"><label>Technological Intervention</label><input id="nowC" type="range" min="0" max="100" step="1" value="34"><span id="nowCTxt">34</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Year 2075</h2>
+          <span class="badge" id="sumFutureBadge">Sum: <span id="sumFuture">0</span></span>
+        </div>
+        <div id="plotFuture" style="height:360px"></div>
+        <div class="controls">
+          <div class="row"><label>Individual Freedom</label><input id="futA" type="range" min="0" max="100" step="1" value="33"><span id="futATxt">33</span></div>
+          <div class="row"><label>Public Health Responsibility</label><input id="futB" type="range" min="0" max="100" step="1" value="33"><span id="futBTxt">33</span></div>
+          <div class="row"><label>Technological Intervention</label><input id="futC" type="range" min="0" max="100" step="1" value="34"><span id="futCTxt">34</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0">Submit</h2>
+      <div class="hr"></div>
+      <p class="notice">We do not collect personal data. Your browser will store a flag to prevent duplicate submissions.</p>
+      <button id="submitBtn">Submit my two responses</button>
+      <div id="status" class="notice" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
+      <h3 style="margin-top:0">About the values</h3>
+      <ul>
+        <li><strong>Individual Freedom</strong>: civil liberties, autonomy, freedom of movement/expression.</li>
+        <li><strong>Public Health Responsibility</strong>: community health, vaccination/containment duties, solidarity.</li>
+        <li><strong>Technological Intervention</strong>: preference for tech-led solutions (sensors, AI, mandates, bio/med-tech).</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built for a university class project. Please answer once. © Your Group</p>
+  </footer>
+
+<script>
+// ======================== CONFIGURE SUPABASE ========================
+const SUPABASE_URL = "https://pdaofkdhchmskiwiorvf.supabase.co"; // your project URL
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkYW9ma2RoY2htc2tpd2lvcnZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0Njc3NjcsImV4cCI6MjA3NzA0Mzc2N30.g6E33glHSm6iGHfS5Luyd4WFDW-7zczZJHYYxJKkyJo"; // anon public key
+const TABLE = "values_responses";
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ======================== TERNARY HELPERS ========================
+const axes = {
+  aaxis: {title: 'Freedom', min:0, ticksuffix:'%'},
+  baxis: {title: 'Public Health', min:0, ticksuffix:'%'},
+  caxis: {title: 'Tech Intervention', min:0, ticksuffix:'%'}
+};
+
+function drawPoint(divId, a, b, c){
+  const data = [{
+    type: 'scatterternary',
+    mode: 'markers',
+    a: [a/100], b: [b/100], c: [c/100],
+    marker: {size: 12}
+  }];
+  const layout = {ternary: axes, margin: {l:10,r:10,t:10,b:10}, showlegend:false, paper_bgcolor:'#111318', plot_bgcolor:'#111318', font:{color:'#f0f3f7'}};
+  Plotly.react(divId, data, layout, {displayModeBar:false});
+}
+
+function clampTo100(a,b,c){
+  const s = a+b+c; if(s===0) return [33,33,34];
+  return [a*100/s, b*100/s, c*100/s].map(x => Math.round(x));
+}
+
+function setupTriplet(prefix){
+  const a = document.getElementById(prefix+'A');
+  const b = document.getElementById(prefix+'B');
+  const c = document.getElementById(prefix+'C');
+  const aT = document.getElementById(prefix+'ATxt');
+  const bT = document.getElementById(prefix+'BTxt');
+  const cT = document.getElementById(prefix+'CTxt');
+  const sumEl = document.getElementById(prefix==='now' ? 'sumNow' : 'sumFuture');
+  const badge = document.getElementById(prefix==='now' ? 'sumNowBadge' : 'sumFutureBadge');
+  const plotId = prefix==='now' ? 'plotNow' : 'plotFuture';
+
+  function update(){
+    let A = parseInt(a.value,10), B = parseInt(b.value,10), C = parseInt(c.value,10);
+    const [AA,BB,CC] = clampTo100(A,B,C);
+    a.value=AA; b.value=BB; c.value=CC;
+    aT.textContent=AA; bT.textContent=BB; cT.textContent=CC;
+    const sum = AA+BB+CC; sumEl.textContent=sum;
+    badge.style.color = sum===100? 'var(--ok)' : 'var(--warn)';
+    drawPoint(plotId, AA, BB, CC);
+  }
+  a.addEventListener('input', update);
+  b.addEventListener('input', update);
+  c.addEventListener('input', update);
+  update();
+
+  return () => ({a:parseInt(a.value,10), b:parseInt(b.value,10), c:parseInt(c.value,10)});
+}
+
+const getNow = setupTriplet('now');
+const getFut = setupTriplet('fut');
+
+// ======================== SUBMISSION ========================
+function hashUser(){
+  const raw = [navigator.userAgent, screen.width, screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone].join('|');
+  let h=0; for(let i=0;i<raw.length;i++){h=(h<<5)-h+raw.charCodeAt(i); h|=0}
+  return 'u_'+Math.abs(h);
+}
+
+const SUBMIT_FLAG = 'values_submitted_v1';
+if(localStorage.getItem(SUBMIT_FLAG)){
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('status').textContent = 'Thanks — your response was already recorded on this browser.';
+}
+
+async function submit(){
+  const now = getNow(); const fut = getFut();
+  if(now.a+now.b+now.c !== 100 || fut.a+fut.b+fut.c !== 100){
+    document.getElementById('status').textContent = 'Please ensure both totals equal 100.'; return;
+  }
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('status').textContent = 'Submitting…';
+
+  try{
+    const { error } = await supabase.from(TABLE).insert({
+      now_a: now.a, now_b: now.b, now_c: now.c,
+      fut_a: fut.a, fut_b: fut.b, fut_c: fut.c,
+      user_hash: hashUser()
+    });
+    if(error) throw error;
+    localStorage.setItem(SUBMIT_FLAG, '1');
+    document.getElementById('status').innerHTML = '<span class="ok">Saved. Thanks for participating!</span>';
+  } catch(err){
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('status').innerHTML = '<span class="warn">Error: '+(err.message||err)+'</span>';
+  }
+}
+
+document.getElementById('submitBtn').addEventListener('click', submit);
+</script>
+</body>
+</html>
